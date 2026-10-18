@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenBuds - Universal Controller</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .container { width: 100%; max-width: 400px; background: #1e293b; padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); box-sizing: border-box; }
+        h1 { text-align: center; font-size: 1.5rem; margin-bottom: 20px; color: #38bdf8; }
+        .btn { width: 100%; background: #0284c7; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; margin-bottom: 20px; }
+        .btn:hover { background: #0369a1; }
+        .status-box { background: #334155; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        .control-group { margin-top: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; color: #94a3b8;}
+        select { width: 100%; padding: 10px; background: #334155; color: white; border: 1px solid #475569; border-radius: 8px; font-size: 1rem; }
+        .log { margin-top: 20px; font-family: monospace; font-size: 0.8rem; background: #000; padding: 10px; border-radius: 6px; max-height: 120px; overflow-y: auto; color: #4ade80; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎧 OpenBuds Controller</h1>
+    <button class="btn" id="connectBtn">Connect Earbuds</button>
+    
+    <div class="status-box">
+        <strong>Status:</strong> <span id="statusTxt">Disconnected</span><br>
+        <strong>Battery:</strong> <span id="batteryTxt">--%</span>
+    </div>
+
+    <!-- EXCLUSIVE FEATURE: OPPO Alive Audio Spatial Toggle -->
+    <div class="control-group">
+        <label for="aliveAudioSelect">✨ OPPO Alive Audio (Spatial Field)</label>
+        <select id="aliveAudioSelect" disabled>
+            <option value="0">Off (Standard Stereo)</option>
+            <option value="1">On (Surround Sound Theater)</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label for="ancSelect">Noise Control Mode</label>
+        <select id="ancSelect" disabled>
+            <option value="3">Normal / Off</option>
+            <option value="2">Active Noise Cancellation (ANC)</option>
+            <option value="1">Transparency Mode</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label for="eqSelect">Equalizer Profile</label>
+        <select id="eqSelect" disabled>
+            <option value="1">Balanced</option>
+            <option value="2">Bass Boost</option>
+            <option value="3">Clear Vocals</option>
+        </select>
+    </div>
+    
+    <div class="log" id="logBox">System ready. Click Connect to begin.</div>
+</div>
+
+<script>
+const OPPO_SERVICE_UUID = '0000079a-d102-11e1-9b23-00025b00a5a5';
+const WRITE_CHAR_UUID   = '0100079a-d102-11e1-9b23-00025b00a5a5';
+const NOTIFY_CHAR_UUID  = '0200079a-d102-11e1-9b23-00025b00a5a5';
+const AUTH_TOKEN        = [0xB5, 0x50, 0xA0, 0x69];
+let writeChar;
+
+function log(msg) {
+    const box = document.getElementById('logBox');
+    box.innerText += `\n> `;
+    box.scrollTop = box.scrollHeight;
+}
+
+document.getElementById('connectBtn').addEventListener('click', async () => {
+    log("Searching for Oppo/OnePlus earbuds...");
+    try {
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [OPPO_SERVICE_UUID] }]
+        });
+        log(`Found: . Connecting...`);
+        const server = await device.gatt.connect();
+        log("Fetching Bluetooth Services...");
+        const service = await server.getPrimaryService(OPPO_SERVICE_UUID);
+        writeChar = await service.getCharacteristic(WRITE_CHAR_UUID);
+        const notifyChar = await service.getCharacteristic(NOTIFY_CHAR_UUID);
+        
+        await notifyChar.startNotifications();
+        notifyChar.addEventListener('characteristicvaluechanged', (e) => {
+            const data = new Uint8Array(e.target.value.buffer);
+            log(`Received: `);
+        });
+        
+        const packet = new Uint8Array([0xAA, 0x07, 0x01, ...AUTH_TOKEN]);
+        await writeChar.writeValueWithoutResponse(packet);
+        
+        document.getElementById('statusTxt').innerText = "Connected";
+        document.getElementById('statusTxt').style.color = "#4ade80";
+        document.getElementById('aliveAudioSelect').disabled = false;
+        document.getElementById('ancSelect').disabled = false;
+        document.getElementById('eqSelect').disabled = false;
+        log("Handshake successful! Features unlocked.");
+    } catch (err) {
+        log(`Error: `);
+    }
+});
+
+// Sends the direct spatial command to the chip override 
+document.getElementById('aliveAudioSelect').addEventListener('change', async (e) => {
+    const val = parseInt(e.target.value);
+    log(`Toggling OPPO Alive Audio to: `);
+    // Reverse Engineered Category 0x07 controls the independent Spatial parameters
+    const pkt = new Uint8Array([0xAA, 0x04, 0x07, val]);
+    if(writeChar) await writeChar.writeValueWithoutResponse(pkt);
+});
+
+document.getElementById('ancSelect').addEventListener('change', async (e) => {
+    const val = parseInt(e.target.value);
+    log(`Changing ANC to: `);
+    const pkt = new Uint8Array([0xAA, 0x04, 0x04, val]);
+    if(writeChar) await writeChar.writeValueWithoutResponse(pkt);
+});
+
+document.getElementById('eqSelect').addEventListener('change', async (e) => {
+    const val = parseInt(e.target.value);
+    log(`Changing EQ to: `);
+    const pkt = new Uint8Array([0xAA, 0x04, 0x05, val]);
+    if(writeChar) await writeChar.writeValueWithoutResponse(pkt);
+});
+</script>
+</body>
+</html>
