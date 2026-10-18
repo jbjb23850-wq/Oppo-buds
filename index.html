@@ -74,8 +74,10 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
     log("Searching for Oppo/OnePlus earbuds...");
     try {
         const device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: [OPPO_SERVICE_UUID] }]
-        });
+    acceptAllDevices: true,
+    optionalServices: [OPPO_SERVICE_UUID]
+});
+
         log(`Found: . Connecting...`);
         const server = await device.gatt.connect();
         log("Fetching Bluetooth Services...");
