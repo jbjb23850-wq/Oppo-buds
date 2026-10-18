@@ -70,27 +70,20 @@ function log(msg) {
     box.scrollTop = box.scrollHeight;
 }
 
-// Robust fallback execution handler to prevent "undefined" packet drops on iOS
 async function safeWrite(packetData) {
     if (!writeChar) {
         log("Error: Not connected to hardware.");
         return;
     }
     try {
-        // Try direct execution channel
-        await writeChar.writeValueWithoutResponse(packetData);
-    } catch (e) {
-        try {
-            // Fallback for secure mobile web view layers that require explicit response blocks
-            await writeChar.writeValueWithResponse(packetData);
-        } catch (innerErr) {
-            log(`Write Fail: ${innerErr.message}`);
-        }
+        await writeChar.writeValue(packetData);
+    } catch (err) {
+        log(`Write Error: ${err.message}`);
     }
 }
 
 document.getElementById('connectBtn').addEventListener('click', async () => {
-    log("Searching for Oppo/OnePlus earbuds...");
+    log("Searching for Oppo earbuds...");
     try {
         const device = await navigator.bluetooth.requestDevice({
             acceptAllDevices: true,
@@ -106,11 +99,12 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
         await notifyChar.startNotifications();
         notifyChar.addEventListener('characteristicvaluechanged', (e) => {
             const data = new Uint8Array(e.target.value.buffer);
-            log(`Received hex data: ${Array.from(data).map(b => b.toString(16)).join(' ')}`);
+            log(`Received telemetry: ${Array.from(data).map(b => b.toString(16)).join(' ')}`);
         });
         
         log("Sending authentication handshake...");
-        const packet = new Uint8Array([0xAA, 0x08, 0x00, 0x00, 0x01, ...AUTH_TOKEN]);
+        // Updated standard handshake prefix
+        const packet = new Uint8Array([0xAA, 0x06, 0x01, 0x01, ...AUTH_TOKEN]);
         await safeWrite(packet);
         
         setTimeout(() => {
@@ -120,31 +114,32 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
             document.getElementById('ancSelect').disabled = false;
             document.getElementById('eqSelect').disabled = false;
             log("Handshake successful! Features unlocked.");
-        }, 1500);
+        }, 1200);
         
     } catch (err) {
         log(`Error: ${err.message}`);
     }
 });
 
+// Using alternate protocol parameter byte configurations (0x02 matrix wrapper)
 document.getElementById('aliveAudioSelect').addEventListener('change', async (e) => {
     const val = parseInt(e.target.value);
     log(`Toggling OPPO Alive Audio to: ${e.target.options[e.target.selectedIndex].text}`);
-    const pkt = new Uint8Array([0xAA, 0x05, 0x00, 0x00, 0x07, val]);
+    const pkt = new Uint8Array([0xAA, 0x04, 0x02, 0x1A, val]); 
     await safeWrite(pkt);
 });
 
 document.getElementById('ancSelect').addEventListener('change', async (e) => {
     const val = parseInt(e.target.value);
     log(`Changing ANC to: ${e.target.options[e.target.selectedIndex].text}`);
-    const pkt = new Uint8Array([0xAA, 0x05, 0x00, 0x00, 0x04, val]);
+    const pkt = new Uint8Array([0xAA, 0x04, 0x02, 0x02, val]); 
     await safeWrite(pkt);
 });
 
 document.getElementById('eqSelect').addEventListener('change', async (e) => {
     const val = parseInt(e.target.value);
     log(`Changing EQ to: ${e.target.options[e.target.selectedIndex].text}`);
-    const pkt = new Uint8Array([0xAA, 0x05, 0x00, 0x00, 0x05, val]);
+    const pkt = new Uint8Array([0xAA, 0x04, 0x02, 0x03, val]); 
     await safeWrite(pkt);
 });
 </script>
