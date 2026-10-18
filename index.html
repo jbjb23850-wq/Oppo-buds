@@ -66,7 +66,7 @@ let writeChar;
 
 function log(msg) {
     const box = document.getElementById('logBox');
-    box.innerText += `\n> `;
+    box.innerText += `\n> ${msg}`;
     box.scrollTop = box.scrollHeight;
 }
 
@@ -74,11 +74,10 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
     log("Searching for Oppo/OnePlus earbuds...");
     try {
         const device = await navigator.bluetooth.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: [OPPO_SERVICE_UUID]
-});
-
-        log(`Found: . Connecting...`);
+            acceptAllDevices: true,
+            optionalServices: [OPPO_SERVICE_UUID]
+        });
+        log(`Found: ${device.name}. Connecting...`);
         const server = await device.gatt.connect();
         log("Fetching Bluetooth Services...");
         const service = await server.getPrimaryService(OPPO_SERVICE_UUID);
@@ -88,45 +87,48 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
         await notifyChar.startNotifications();
         notifyChar.addEventListener('characteristicvaluechanged', (e) => {
             const data = new Uint8Array(e.target.value.buffer);
-            log(`Received: `);
+            log(`Received: ${Array.from(data).map(b => b.toString(16)).join(' ')}`);
         });
         
-        const packet = new Uint8Array([0xAA, 0x07, 0x01, ...AUTH_TOKEN]);
+        // Protocol Fix: Send standard OPO V1 structural auth format
+        log("Sending authentication handshake...");
+        const packet = new Uint8Array([0xAA, 0x08, 0x00, 0x00, 0x01, ...AUTH_TOKEN]);
         await writeChar.writeValueWithoutResponse(packet);
         
-        document.getElementById('statusTxt').innerText = "Connected";
-        document.getElementById('statusTxt').style.color = "#4ade80";
-        document.getElementById('aliveAudioSelect').disabled = false;
-        document.getElementById('ancSelect').disabled = false;
-        document.getElementById('eqSelect').disabled = false;
-        log("Handshake successful! Features unlocked.");
+        // Wait 2 seconds for the earbud microchip to register the session
+        setTimeout(() => {
+            document.getElementById('statusTxt').innerText = "Connected";
+            document.getElementById('statusTxt').style.color = "#4ade80";
+            document.getElementById('aliveAudioSelect').disabled = false;
+            document.getElementById('ancSelect').disabled = false;
+            document.getElementById('eqSelect').disabled = false;
+            log("Handshake successful! Features unlocked.");
+        }, 2000);
+        
     } catch (err) {
-        log(`Error: `);
+        log(`Error: ${err.message}`);
     }
 });
 
-// Sends the direct spatial command to the chip override 
 document.getElementById('aliveAudioSelect').addEventListener('change', async (e) => {
     const val = parseInt(e.target.value);
-    log(`Toggling OPPO Alive Audio to: `);
-    // Reverse Engineered Category 0x07 controls the independent Spatial parameters
-    const pkt = new Uint8Array([0xAA, 0x04, 0x07, val]);
+    log(`Toggling OPPO Alive Audio to: ${e.target.options[e.target.selectedIndex].text}`);
+    // OPO V1 Standard structure wrapper for spatial fields
+    const pkt = new Uint8Array([0xAA, 0x05, 0x00, 0x00, 0x07, val]);
     if(writeChar) await writeChar.writeValueWithoutResponse(pkt);
 });
 
 document.getElementById('ancSelect').addEventListener('change', async (e) => {
     const val = parseInt(e.target.value);
-    log(`Changing ANC to: `);
-    const pkt = new Uint8Array([0xAA, 0x04, 0x04, val]);
+    log(`Changing ANC to: ${e.target.options[e.target.selectedIndex].text}`);
+    const pkt = new Uint8Array([0xAA, 0x05, 0x00, 0x00, 0x04, val]);
     if(writeChar) await writeChar.writeValueWithoutResponse(pkt);
 });
 
 document.getElementById('eqSelect').addEventListener('change', async (e) => {
     const val = parseInt(e.target.value);
-    log(`Changing EQ to: `);
-    const pkt = new Uint8Array([0xAA, 0x04, 0x05, val]);
+    log(`Changing EQ to: ${e.target.options[e.target.selectedIndex].text}`);
+    const pkt = new Uint8Array([0xAA, 0x05, 0x00, 0x00, 0x05, val]);
     if(writeChar) await writeChar.writeValueWithoutResponse(pkt);
 });
 </script>
-</body>
-</html>
