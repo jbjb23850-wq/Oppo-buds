@@ -104,7 +104,7 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
         
         log("Sending authentication handshake...");
         // Updated standard handshake prefix
-        const packet = new Uint8Array([0xAA, 0x06, 0x01, 0x01, ...AUTH_TOKEN]);
+const packet = new Uint8Array([0xAA, 0x08, 0x00, 0x00, 0x01, ...AUTH_TOKEN]); 
         await safeWrite(packet);
         
         setTimeout(() => {
@@ -125,7 +125,7 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
 document.getElementById('aliveAudioSelect').addEventListener('change', async (e) => {
     const val = parseInt(e.target.value);
     log(`Toggling OPPO Alive Audio to: ${e.target.options[e.target.selectedIndex].text}`);
-    const pkt = new Uint8Array([0xAA, 0x04, 0x02, 0x1A, val]); 
+const pkt = new Uint8Array([0xAA, 0x05, 0x00, 0x00, 0x07, val]);
     await safeWrite(pkt);
 });
 
